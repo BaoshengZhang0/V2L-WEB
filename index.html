@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2L-Fusion: 大规模XYZRGB点云查看器 (支持PLY/PCD)</title>
+    <!-- 保留样式，移除无关的强度通道描述，聚焦RGB -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        /* 保留原有所有样式，仅修改少量文字以强调RGB */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f9fafc;
+            color: #1e293b;
+            line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 2rem 2rem;
+        }
+
+        .hero {
+            background: linear-gradient(145deg, #0b1e33 0%, #123456 100%);
+            color: white;
+            padding: 3rem 0 2.5rem 0;
+            border-bottom: 5px solid #3b82f6;
+        }
+
+        .hero .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .paper-title {
+            font-size: 2.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            max-width: 1000px;
+            line-height: 1.2;
+            margin-bottom: 1.2rem;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .authors {
+            font-size: 1.3rem;
+            font-weight: 400;
+            color: #bfd9ff;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px dashed #3a5f8b;
+            padding-bottom: 1.2rem;
+            display: inline-block;
+        }
+
+        .venue {
+            background: #1e3a5f;
+            padding: 0.6rem 1.8rem;
+            border-radius: 40px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 2rem;
+            color: #fff;
+            border: 1px solid #3b82f6;
+        }
+
+        .venue i {
+            color: #ffd966;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 0.8rem;
+        }
+
+        .btn {
+            background: white;
+            color: #0b1e33;
+            padding: 0.8rem 2rem;
+            border-radius: 40px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .btn i {
+            font-size: 1.2rem;
+        }
+
+        .btn.github {
+            background: #24292e;
+            color: white;
+        }
+
+        .btn.github:hover {
+            background: #000;
+        }
+
+        .btn.pdf:hover {
+            background: #e6f0ff;
+            border-color: #3b82f6;
+        }
+
+        .btn.arXiv:hover {
+            background: #e6f0ff;
+            border-color: #3b82f6;
+        }
+
+        .figure-placeholder {
+            margin-top: 2.5rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 24px;
+            padding: 1.2rem 1.2rem 0.8rem 1.2rem;
+            border: 1px solid #2d4b71;
+            width: 100%;
+        }
+
+        .figure-caption {
+            color: #a3c2e0;
+            font-size: 0.95rem;
+            margin-top: 0.8rem;
+        }
+
+        .figure-image {
+            background: #1f3a5c;
+            height: 160px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #98b9e6;
+            font-weight: 500;
+            background-image: radial-gradient(circle at 20px 20px, #2d4b71 2px, transparent 2px),
+            radial-gradient(circle at 60px 80px, #2d4b71 2px, transparent 2px);
+            background-size: 40px 40px, 80px 80px;
+        }
+
+        section {
+            background: white;
+            border-radius: 28px;
+            padding: 2.2rem 2.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 10px 30px -10px rgba(0,20,40,0.1);
+            border: 1px solid #e9eef3;
+        }
+
+        h2 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #0b2a41;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-left: 8px solid #3b82f6;
+            padding-left: 1.5rem;
+        }
+
+        h2 i {
+            color: #3b82f6;
+            font-size: 2rem;
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin: 1.8rem 0 1rem 0;
+            color: #1e3a5f;
+        }
+
+        .contributions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .contrib-card {
+            background: #f2f7ff;
+            border-radius: 24px;
+            padding: 1.8rem 1.2rem;
+            border: 1px solid #d9e9ff;
+            transition: 0.15s;
+        }
+
+        .contrib-card:hover {
+            background: #e7f0fe;
+        }
+
+        .contrib-card i {
+            font-size: 2.2rem;
+            color: #2563eb;
+            margin-bottom: 0.8rem;
+        }
+
+        .contrib-card h4 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .math-block {
+            background: #f3f6fc;
+            padding: 1rem 1.8rem;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            overflow-x: auto;
+            white-space: nowrap;
+            border: 1px solid #cfdfff;
+            margin: 1.2rem 0;
+        }
+
+        .code-inline {
+            background: #ecf2fa;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 0.95rem;
+            border: 1px solid #bdd3f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #e2edff;
+            font-weight: 600;
+            padding: 12px 10px;
+        }
+
+        td, th {
+            border: 1px solid #ced8e6;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .badge {
+            background: #2563eb;
+            color: white;
+            padding: 0.2rem 0.9rem;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: #4b6589;
+            font-size: 0.95rem;
+        }
+
+        hr {
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #cbd5e1, transparent);
+            margin: 2rem 0;
+        }
+
+        .method-diagram {
+            display: flex;
+            flex-wrap: wrap;
+            background: #f0f5fe;
+            border-radius: 28px;
+            padding: 1.5rem;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .method-step {
+            background: white;
+            border-radius: 50px;
+            padding: 0.6rem 1.2rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+            font-weight: 500;
+            border: 1px solid #ccdfff;
+            margin: 5px;
+        }
+
+        i.arrow {
+            color: #3b82f6;
+            font-size: 1.6rem;
+        }
+
+        .viewer-panel {
+            background: #1a2634;
+            border-radius: 28px;
+            padding: 1.8rem;
+            color: white;
+            margin-top: 1rem;
+        }
+        #point-cloud-canvas {
+            width: 100%;
+            height: 500px;
+            border-radius: 24px;
+            background: #111a24;
+            border: 2px solid #2d4b71;
+            cursor: grab;
+        }
+        .viewer-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 2rem;
+            margin: 1.5rem 0 0.8rem 0;
+        }
+        .viewer-select {
+            background: #0e1d2f;
+            color: white;
+            padding: 0.8rem 1.8rem;
+            border-radius: 40px;
+            border: 1px solid #3b82f6;
+            font-size: 1rem;
+            font-weight: 500;
+            min-width: 280px;
+        }
+        .viewer-select option {
+            background: #1a2a3a;
+        }
+        .legend {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .color-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+        }
+        .dot-blue { background: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+        .dot-green { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .dot-orange { background: #f97316; box-shadow: 0 0 8px #f97316; }
+
+        /* 简化强度相关样式，但保留部分用于RGB模式切换 */
+        .intensity-badge {
+            background: #2d4b71;
+            padding: 0.3rem 1rem;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .intensity-mode-selector {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .mode-btn {
+            background: #1e2f42;
+            color: white;
+            border: 1px solid #3b82f6;
+            padding: 0.4rem 1.2rem;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .mode-btn:hover {
+            background: #2d4b71;
+        }
+        .mode-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .path-info {
+            background: #1a2a3a;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #a3c2e0;
+            margin-top: 0.5rem;
+        }
+
+        /* 加载进度样式 */
+        .loading-progress {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            color: white;
+            z-index: 100;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 700px) {
+            .paper-title { font-size: 2rem; }
+            .hero { padding: 2rem 0; }
+            .container { padding: 1rem 1.2rem; }
+            section { padding: 1.5rem 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="hero">
+    <div class="container">
+        <h1 class="paper-title">V2L-Fusion: Scale-Aware Vision-to-LiDAR Fusion for Field-of-View Expansion</h1>
+        <div class="authors">
+            <i class="fas fa-user-graduate"></i> Anonymous Author(s) · Submission ID: xxxx
+        </div>
+        <div class="venue">
+            <i class="fas fa-calendar-alt"></i> ACM MM 2026 (under review)
+            <span style="margin-left: 10px;background: #2563eb; padding: 0.2rem 0.8rem; border-radius: 20px;">Oral preview</span>
+        </div>
+        <div class="btn-group">
+            <a href="#" class="btn pdf"><i class="fas fa-file-pdf"></i> Paper (PDF)</a>
+            <a href="#" class="btn arXiv"><i class="fas fa-archive"></i> arXiv</a>
+            <a href="#" class="btn github"><i class="fab fa-github"></i> GitHub (V2L-Fusion)</a>
+        </div>
+
+        <div class="figure-placeholder">
+            <div class="figure-image">
+                <i class="fas fa-cube" style="font-size: 3rem; margin-right: 20px;"></i>
+                <i class="fas fa-arrows-left-right" style="font-size: 2rem;"></i>
+                <i class="fas fa-camera" style="font-size: 3rem; margin-left: 20px;"></i>
+            </div>
+            <div class="figure-caption">
+                <strong>Figure 1:</strong> V2L-Fusion 通过前馈视觉重建扩展固态激光雷达的窄视场，实现低成本大范围感知。
+            </div>
+        </div>
+    </div>
+</div>
+
+<main class="container">
+    <section>
+        <h2><i class="fas fa-microscope"></i> Abstract</h2>
+        <p style="font-size: 1.08rem;">Solid-state LiDAR (SSL) is popular in robotics due to low cost and size, but its narrow field of view (FoV) limits perception. Meanwhile, feed‑forward 3D reconstruction from a single image (e.g., VGGT) provides dense spatial priors. We propose <strong>V2L-Fusion</strong>, a cross‑modal framework that aligns vision‑generated point clouds with narrow‑FoV SSL measurements. The core challenge is <strong>asymmetric alignment</strong> causing scale degradation. We introduce anisotropy‑weighted scale initialization, exponential scale parameterization, and weight‑adaptive scale regularization to achieve stable metric alignment. Experiments show reliable FoV expansion, effectively turning a monocular camera + narrow LiDAR into a large‑FoV sensing system. Code is publicly available.</p>
+        <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+            <span class="badge">#solid-state LiDAR</span>
+            <span class="badge">#sensor fusion</span>
+            <span class="badge">#FoV expansion</span>
+            <span class="badge">#feed‑forward reconstruction</span>
+        </div>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-star"></i> Main Contributions</h2>
+        <div class="contributions">
+            <div class="contrib-card">
+                <i class="fas fa-cubes"></i>
+                <h4>Cross-modal framework</h4>
+                <p>First work using feed‑forward 3D reconstruction to expand SSL FoV. Minimal setup (monocular + narrow LiDAR) achieves large‑FoV perception.</p>
+            </div>
+            <div class="contrib-card">
+                <i class="fas fa-weight-scale"></i>
+                <h4>Anisotropy‑weighted scale initialization</h4>
+                <p>Geometry‑aware initialization via robust covariance & eigenvalue weighting, reducing scale ambiguity before alignment.</p>
+            </div>
+            <div class="contrib-card">
+                <i class="fas fa-chart-line"></i>
+                <h4>Robust optimization</h4>
+                <p>Exponential scale parameterization + geometry‑adaptive regularization (λ = κ·exp(-χ)) prevents scale degeneracy.</p>
+            </div>
+            <div class="contrib-card">
+                <i class="fas fa-database"></i>
+                <h4>Extensive evaluation</h4>
+                <p>Self‑collected (YIJIA‑AVIA/MID) & public datasets (JLCC, MLCC). Benchmarked against 13 registration methods + 5 vision models.</p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-diagram-project"></i> Method: V2L‑Fusion</h2>
+        <div class="method-diagram">
+            <span class="method-step"><i class="fas fa-camera-retro"></i> Image</span>
+            <i class="fas fa-arrow-right arrow"></i>
+            <span class="method-step"><i class="fas fa-robot"></i> Feed‑forward model <br> <small>(VGGT / DA3 / π³)</small></span>
+            <i class="fas fa-arrow-right arrow"></i>
+            <span class="method-step"><i class="fas fa-cloud"></i> Vision point cloud <br> (scale‑ambiguous)</span>
+            <i class="fas fa-arrow-right arrow"></i>
+            <span class="method-step" style="background: #d9eaff;"><i class="fas fa-ruler-combined"></i> <strong>Anisotropic scale init</strong> (eq. 7)</span>
+            <i class="fas fa-arrow-right arrow"></i>
+            <span class="method-step" style="background: #d9eaff;"><i class="fas fa-infinity"></i> Exp. scale + adaptive reg. <br> (λ = κ·exp(-χ))</span>
+            <i class="fas fa-arrow-right arrow"></i>
+            <span class="method-step"><i class="fas fa-check-double"></i> Metric aligned <br> expanded FoV</span>
+        </div>
+    </section>
+
+    <!-- 新增：OVERVIEW 部分 -->
+    <section>
+        <h2><i class="fas fa-image"></i> Overview</h2>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: start;">
+            <!-- 左侧：竖版 OVERVIEW 图 -->
+            <div style="background: #f0f5fe; border-radius: 24px; padding: 1rem; border: 1px solid #cfdfff;">
+                <img src="./OV.png" alt="V2L-Fusion Overview" style="width: 500px; height: auto; border-radius: 16px; display: block;" />
+                <p style="text-align: center; color: #4b6589; font-size: 0.9rem; margin-top: 0.8rem;">
+                    <strong>Figure 2:</strong> System overview of V2L-Fusion
+                </p>
+            </div>
+
+            <!-- 右侧：文字介绍 -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div>
+                    <h3 style="margin-top: 0;"><i class="fas fa-bullseye"></i> Objective</h3>
+                    <p style="font-size: 1.05rem; line-height: 1.8;">
+                        V2L-Fusion addresses the limited field-of-view (FoV) challenge in solid-state LiDAR systems by
+                        leveraging monocular vision as a complementary sensing modality. Our framework achieves dense,
+                        metric-scale 3D reconstruction through cross-modal sensor fusion, enabling cost-effective large-scale
+                        perception for robotics and autonomous systems.
+                    </p>
+                </div>
+
+                <div>
+                    <h3><i class="fas fa-cogs"></i> Key Components</h3>
+                    <div style="display: grid; gap: 1rem;">
+                        <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 1rem 1.2rem; border-radius: 12px;">
+                            <strong style="color: #1e3a5f; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-camera"></i> Vision-based Dense Prior
+                            </strong>
+                            <p style="margin: 0.5rem 0 0 0; color: #475569; font-size: 0.95rem;">
+                                Utilizes feed-forward 3D reconstruction models (e.g., VGGT) to generate dense point clouds
+                                from single images, providing rich spatial priors for alignment.
+                            </p>
+                        </div>
+
+                        <div style="background: #f8fafc; border-left: 4px solid #22c55e; padding: 1rem 1.2rem; border-radius: 12px;">
+                            <strong style="color: #1e3a5f; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-arrows-alt-h"></i> Asymmetric Scale Alignment
+                            </strong>
+                            <p style="margin: 0.5rem 0 0 0; color: #475569; font-size: 0.95rem;">
+                                Introduces anisotropy-weighted scale initialization and exponential parameterization to
+                                resolve scale ambiguity between vision and LiDAR coordinate systems.
+                            </p>
+                        </div>
+
+                        <div style="background: #f8fafc; border-left: 4px solid #f97316; padding: 1rem 1.2rem; border-radius: 12px;">
+                            <strong style="color: #1e3a5f; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-shield-alt"></i> Robust Optimization
+                            </strong>
+                            <p style="margin: 0.5rem 0 0 0; color: #475569; font-size: 0.95rem;">
+                                Employs geometry-adaptive regularization with weight factor λ = κ·exp(-χ) to prevent
+                                scale degeneracy in low-texture or sparse regions.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3><i class="fas fa-layer-group"></i> Processing Pipeline</h3>
+                    <ol style="padding-left: 1.5rem; line-height: 2; color: #334155;">
+                        <li><strong>Input Acquisition:</strong> Synchronized monocular image + narrow-FoV SSL measurements</li>
+                        <li><strong>Vision Reconstruction:</strong> Feed-forward model predicts dense but scale-ambiguous point cloud</li>
+                        <li><strong>Scale Initialization:</strong> Anisotropic covariance analysis provides initial scale estimate</li>
+                        <li><strong>Cross-modal Registration:</strong> Joint optimization of rotation, translation, and scale</li>
+                        <li><strong>Output:</strong> Metric-aligned, expanded FoV point cloud with RGB-D information</li>
+                    </ol>
+                </div>
+
+                <div style="background: linear-gradient(135deg, #e0e7ff 0%, #f0f5fe 100%); padding: 1.5rem; border-radius: 20px; border: 1px solid #c7d2fe;">
+                    <strong style="color: #1e3a5f; display: flex; align-items: center; gap: 10px; font-size: 1.1rem;">
+                        <i class="fas fa-lightbulb" style="color: #fbbf24;"></i> Key Insight
+                    </strong>
+                    <p style="margin: 0.8rem 0 0 0; color: #475569; line-height: 1.7;">
+                        The fundamental challenge lies in the <em>asymmetric nature</em> of vision-to-LiDAR alignment:
+                        vision provides dense but scale-ambiguous data, while LiDAR offers sparse but metrically accurate
+                        measurements. Our solution explicitly models this asymmetry through adaptive regularization and
+                        scale parameterization.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+        <!-- 主要修改：点云查看器部分，支持PLY格式 -->
+    <section>
+        <h2><i class="fas fa-cube"></i> 交互式点云查看器 (支持PLY/PCD格式)</h2>
+        <p>从pcd子目录加载点云文件，支持超大点云流式加载与LOD渲染。当前文件列表：</p>
+        <div class="path-info" style="display: none;">
+            📁 当前路径: <span id="current-path"></span><br>
+            📄 预期文件: pcd/lidar.ply (XYZ+强度), pcd/vision.ply (XYZ+RGB), pcd/fused.ply (XYZ+RGB+强度) —— 其中vision.ply为纯RGB彩色点云
+        </div>
+        <div class="viewer-panel">
+            <!-- 加载进度显示 -->
+            <div class="loading-progress" id="loading-progress" style="display: none;">
+                <div>加载中... <span id="progress-text">0%</span></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+<!--            <div id="point-cloud-canvas"></div>-->
+<!--            <div class="viewer-controls">-->
+<!--                <select id="pcd-select" class="viewer-select">-->
+<!--                    &lt;!&ndash; YIJIA-AVIA 数据集 &ndash;&gt;-->
+<!--                    <option value="YIJIA-AVIA-1">🔵 YIJIA-AVIA Scene-1</option>-->
+<!--                    <option value="YIJIA-AVIA-2">🔵 YIJIA-AVIA Scene-2</option>-->
+<!--                    <option value="YIJIA-AVIA-3">🔵 YIJIA-AVIA Scene-3</option>-->
+<!--                    <option value="YIJIA-AVIA-4">🔵 YIJIA-AVIA Scene-4</option>-->
+<!--                    <option value="YIJIA-AVIA-5">🔵 YIJIA-AVIA Scene-5</option>-->
+<!--                    <option value="YIJIA-AVIA-6">🔵 YIJIA-AVIA Scene-6</option>-->
+<!--                    <option value="YIJIA-AVIA-7">🔵 YIJIA-AVIA Scene-7</option>-->
+<!--                    <option value="YIJIA-AVIA-8">🔵 YIJIA-AVIA Scene-8</option>-->
+<!--                    <option value="YIJIA-AVIA-9">🔵 YIJIA-AVIA Scene-9</option>-->
+<!--                    <option value="YIJIA-AVIA-10">🔵 YIJIA-AVIA Scene-10</option>-->
+<!--                    &lt;!&ndash; YIJIA-MID 数据集 &ndash;&gt;-->
+<!--                    <option value="YIJIA-MID-1">🔵 YIJIA-MID Scene-1</option>-->
+<!--                    <option value="YIJIA-MID-2">🔵 YIJIA-MID Scene-2</option>-->
+<!--                    <option value="YIJIA-MID-3">🔵 YIJIA-MID Scene-3</option>-->
+<!--                    <option value="YIJIA-MID-4">🔵 YIJIA-MID Scene-4</option>-->
+<!--                    <option value="YIJIA-MID-5">🔵 YIJIA-MID Scene-5</option>-->
+<!--                    <option value="YIJIA-MID-6">🔵 YIJIA-MID Scene-6</option>-->
+<!--                    <option value="YIJIA-MID-7">🔵 YIJIA-MID Scene-7</option>-->
+<!--                    <option value="YIJIA-MID-8">🔵 YIJIA-MID Scene-8</option>-->
+<!--                    <option value="YIJIA-MID-9">🔵 YIJIA-MID Scene-9</option>-->
+<!--                    <option value="YIJIA-MID-10">🔵 YIJIA-MID Scene-10</option>-->
+<!--                </select>-->
+
+<!--                <div class="legend">-->
+<!--                    <div class="legend-item"><span class="color-dot dot-blue"></span> YIJIA</div>-->
+<!--                    <div class="legend-item"><span class="color-dot dot-green"></span> JLCC</div>-->
+<!--                    <div class="legend-item"><span class="color-dot dot-orange"></span> MLCC</div>-->
+<!--                </div>-->
+<!--            </div>-->
+
+            <div id="point-cloud-canvas"></div>
+            <div class="viewer-controls">
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <select id="dataset-group" class="viewer-select" style="min-width: 200px;">
+                        <option value="YIJIA-AVIA">YIJIA-AVIA Dataset</option>
+                        <option value="YIJIA-MID">YIJIA-MID Dataset</option>
+                        <option value="JLCC">JLCC Dataset</option>
+                        <option value="MLCC-AVIA">MLCC-AVIA Dataset</option>
+                        <option value="MLCC-MID">MLCC-MID Dataset</option>
+                    </select>
+
+                    <select id="pcd-select" class="viewer-select" style="flex: 1; min-width: 250px;">
+                        <!-- 选项将通过 JavaScript 动态生成 -->
+                    </select>
+                </div>
+
+<!--                <div class="legend">-->
+<!--                    <div class="legend-item"><span class="color-dot dot-blue"></span> YIJIA</div>-->
+<!--                    <div class="legend-item"><span class="color-dot dot-green"></span> JLCC</div>-->
+<!--                    <div class="legend-item"><span class="color-dot dot-orange"></span> MLCC</div>-->
+<!--                </div>-->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 1rem;">
+                    <p style="color: #a3c2e0; font-size: 0.9rem; margin: 0;">
+                        <i class="fas fa-info-circle"></i> 当前加载: <span id="current-file">AVIA-2.ply</span> &nbsp; | &nbsp;
+                        <i class="fas fa-cube"></i> 点数: <span id="point-count">0</span> &nbsp; | &nbsp;
+                        <i class="fas fa-palette"></i> RGB <span id="rgb-status">可用</span> &nbsp; | &nbsp;
+                        <i class="fas fa-chart-line"></i> 强度通道 <span id="intensity-status">可用</span>
+                    </p>
+                    <div class="intensity-badge" id="intensity-range" style="display: none;">
+                        <i class="fas fa-sun"></i> 强度范围: <span id="intensity-min">0</span> - <span id="intensity-max">255</span>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+
+
+            <!-- 模式切换：默认RGB，若点云无强度则灰度相关选项无效，但保留用于兼容 -->
+            <div class="intensity-mode-selector" id="intensity-mode-selector">
+<!--                <span class="mode-btn active" data-mode="rgb">🎨 原始RGB (默认，用于视觉点云)</span>-->
+<!--                <span class="mode-btn" data-mode="thermal">🌡️ 热力图 (强度映射)</span>-->
+<!--                <span class="mode-btn" data-mode="brightness">💡 亮度增强 (强度映射)</span>-->
+<!--                <span class="mode-btn" data-mode="grayscale">⚪ 灰度 (强度映射)</span>-->
+            </div>
+
+<!--            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 1rem;">-->
+<!--                <p style="color: #a3c2e0; font-size: 0.9rem; margin: 0;">-->
+<!--                    <i class="fas fa-info-circle"></i> 当前加载: <span id="current-file">AVIA-2.ply</span> &nbsp; | &nbsp;-->
+<!--                    <i class="fas fa-cube"></i> 点数: <span id="point-count">0</span> &nbsp; | &nbsp;-->
+<!--                    <i class="fas fa-palette"></i> RGB <span id="rgb-status">可用</span> &nbsp; | &nbsp;-->
+<!--                    <i class="fas fa-chart-line"></i> 强度通道 <span id="intensity-status">可用</span>-->
+<!--                </p>-->
+<!--                <div class="intensity-badge" id="intensity-range" style="display: none;">-->
+<!--                    <i class="fas fa-sun"></i> 强度范围: <span id="intensity-min">0</span> - <span id="intensity-max">255</span>-->
+<!--                </div>-->
+<!--            </div>-->
+        </div>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-eye"></i> 定性视场扩展效果</h2>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+            <div style="flex: 1; min-width: 250px; background: #eef3fb; border-radius: 28px; padding: 1rem;">
+                <div style="background: #a0c0e0; height: 150px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #1e3a5f;">
+                    <i class="fas fa-lidar" style="font-size: 3rem;"></i>  LiDAR only (窄视场)
+                </div>
+                <figcaption style="margin-top: 0.5rem;">原始固态激光雷达点云 (FoV受限)</figcaption>
+            </div>
+            <div style="flex: 1; min-width: 250px; background: #eef3fb; border-radius: 28px; padding: 1rem;">
+                <div style="background: #b8d3ff; height: 150px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #1e3a5f;">
+                    <i class="fas fa-cloud-sun" style="font-size: 3rem;"></i>  + V2L-Fusion
+                </div>
+                <figcaption style="margin-top: 0.5rem;">融合后：视觉点云对齐，有效范围扩大 (彩色视觉点云)</figcaption>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-table"></i> Experimental highlights</h2>
+        <h3> Robustness & convergence (Table 1) </h3>
+        <table>
+            <thead><tr><th>Scene</th><th>E<sub>R</sub> median (°)</th><th>E<sub>t</sub> median (m)</th><th>E<sub>s</sub> median</th><th>SR (%)</th></tr></thead>
+            <tbody>
+            <tr><td>YIJIA‑AVIA</td><td>0.21</td><td>0.027</td><td>0.011</td><td>96.4</td></tr>
+            <tr><td>YIJIA‑MID</td><td>0.18</td><td>0.019</td><td>0.008</td><td>98.1</td></tr>
+            <tr><td>JLCC (avg)</td><td>0.74</td><td>0.058</td><td>0.039</td><td>91.2</td></tr>
+            </tbody>
+        </table>
+        <h3> Comparison with registration methods (Table 2, excerpt)</h3>
+        <table>
+            <thead><tr><th>Method</th><th>YIJIA‑AVIA (E<sub>R</sub>°/E<sub>t</sub>m/E<sub>s</sub>)</th><th>YIJIA‑MID</th><th>JLCC</th></tr></thead>
+            <tbody>
+            <tr><td>GICP</td><td>42.0 / 1.57 / 0.327</td><td>58.4 / 0.713 / 0.320</td><td>10.6 / 1.47 / 0.057</td></tr>
+            <tr><td>TEASER++</td><td>50.7 / 0.45 / 0.153</td><td>75.6 / 6.51 / 0.060</td><td>140.6 / 4.44 / 0.060</td></tr>
+            <tr><td>MAC</td><td>1.2 / 1.354 / –</td><td>3.8 / 0.643 / –</td><td>9.2 / 1.698 / –</td></tr>
+            <tr><td><strong>Ours</strong></td><td><strong>1.6 / 0.315 / 0.021</strong></td><td><strong>1.9 / 0.128 / 0.0097</strong></td><td><strong>7.6 / 1.395 / 0.049</strong></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-calculator"></i> Key formulation: asymmetric alignment</h2>
+        <p>The residual for point <strong>ρᵢ</strong> is point‑to‑plane with binary inlier weight ρ (eq. 10). Optimization variable is <strong>δΘ ∈ sim(3)</strong>. Exponential parameterization s = exp(ρ) guarantees positivity. The adaptive regularizer <span class="code-inline">ℛ_s = √λ (ρ − ρₚ)</span> with λ = κ·exp(-χ) (χ = coefficient of variation) stiffens constraints in low‑structure areas. Jacobians are derived for efficient Gauss‑Newton.</p>
+        <div class="math-block">
+            [s,R,t] = argmin  e(ρ,R,t)ᵀΣ⁻¹e + ℛ_s² , &nbsp; Jᵢ = [Aᵢ/Pᵢ, Bᵢ/Pᵢ, Cᵢ/Pᵢ] · [Rρᵢ'+t, -(Rρᵢ'+t)ˣ, I]
+        </div>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-microchip"></i> Datasets & platform</h2>
+        <ul style="columns: 2; list-style: none; padding-left: 0;">
+            <li><i class="fas fa-check-circle" style="color:#2563eb;"></i> <strong>YIJIA‑AVIA / MID</strong> – Gemini 336L + Livox AVIA / MID‑40, 10 scenes</li>
+            <li><i class="fas fa-check-circle" style="color:#2563eb;"></i> <strong>JLCC</strong> – artificially split into low‑overlap quarters</li>
+            <li><i class="fas fa-check-circle" style="color:#2563eb;"></i> <strong>MLCC‑AVIA / MID</strong> – 5 scenes each</li>
+            <li><i class="fas fa-check-circle" style="color:#2563eb;"></i> <strong>Hardware</strong> – i9‑14900KF, RTX 4090, 24GB</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2><i class="fas fa-quote-right"></i> Conclusion & reproducibility</h2>
+        <p>We presented <strong>V2L-Fusion</strong> – a scale‑aware fusion framework that aligns monocular depth predictions with narrow‑FoV solid‑state LiDAR. Our anisotropy‑weighted initialization, exponential parameterization, and adaptive regularization solve the asymmetric alignment problem. Extensive experiments prove robustness and accuracy, enabling low‑cost FoV expansion. Code, datasets, and pre‑trained weights are <i class="fas fa-code"></i> <a href="#">publicly available on GitHub</a>.</p>
+        <hr>
+        <div style="display: flex; justify-content: center; gap: 2rem; font-size: 1.2rem;">
+            <span><i class="fas fa-star" style="color: #fbbf24;"></i> If you find this useful, please cite our paper.</span>
+        </div>
+        <div style="background: #ecf2fa; border-radius: 18px; padding: 1.2rem; margin-top: 2rem;">
+                <pre style="white-space: pre-wrap; font-family: 'Inter', monospace;">@misc{v2lfusion2026,
+  title={V2L-Fusion: Scale-Aware Vision-to-LiDAR Fusion for Field-of-View Expansion},
+  author={Anonymous},
+  booktitle={ACM MM},
+  year={2026}}</pre>
+        </div>
+    </section>
+
+    <div class="footer">
+        <i class="fas fa-copyright"></i> 2026 Anonymous Authors. For review purpose – open source upon acceptance.
+    </div>
+</main>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+
+    // --- 初始化场景、相机、渲染器 ---
+    const canvas = document.getElementById('point-cloud-canvas');
+    const width = canvas.clientWidth;
+    const height = 500;
+
+    const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: false
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.autoClear = true;
+    canvas.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111a24);
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.set(8, 6, 12);
+    camera.lookAt(0, 0.5, 0);
+
+    // --- 控制器优化 ---
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 0.8;
+    controls.enableZoom = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.8;
+    controls.target.set(0, 0.5, 0);
+    controls.maxPolarAngle = Math.PI * 0.9;
+    controls.saveState();
+
+    // --- 基础光照 ---
+    const ambientLight = new THREE.AmbientLight(0x404060);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(1, 2, 1);
+    scene.add(dirLight);
+    const backLight = new THREE.PointLight(0x446688, 0.8);
+    backLight.position.set(-2, 1, -3);
+    scene.add(backLight);
+
+    const pointsGroup = new THREE.Group();
+    scene.add(pointsGroup);
+    // 直接添加旋转代码：
+    pointsGroup.rotation.x = Math.PI / 2;  // 绕X轴转90度
+    pointsGroup.rotation.y = Math.PI / 2;      // 绕Y轴转180度
+    pointsGroup.rotation.z = Math.PI / 2;            // 绕Z轴不转
+
+    // UI元素
+    const currentFileSpan = document.getElementById('current-file');
+    const pointCountSpan = document.getElementById('point-count');
+    const rgbStatusSpan = document.getElementById('rgb-status');
+    const intensityStatusSpan = document.getElementById('intensity-status');
+    const intensityMinSpan = document.getElementById('intensity-min');
+    const intensityMaxSpan = document.getElementById('intensity-max');
+    const currentPathSpan = document.getElementById('current-path');
+    const loadingProgress = document.getElementById('loading-progress');
+    const progressText = document.getElementById('progress-text');
+    const progressFill = document.getElementById('progress-fill');
+
+        // UI 元素
+    // const currentFileSpan = document.getElementById('current-file');
+    // const pointCountSpan = document.getElementById('point-count');
+    // const rgbStatusSpan = document.getElementById('rgb-status');
+    // const intensityStatusSpan = document.getElementById('intensity-status');
+    // const intensityMinSpan = document.getElementById('intensity-min');
+    // const intensityMaxSpan = document.getElementById('intensity-max');
+    // const currentPathSpan = document.getElementById('current-path');
+    // const loadingProgress = document.getElementById('loading-progress');
+    // const progressText = document.getElementById('progress-text');
+    // const progressFill = document.getElementById('progress-fill');
+    const datasetGroupSelect = document.getElementById('dataset-group');
+    const pcdSelect = document.getElementById('pcd-select');
+
+    // 定义不同数据集的场景配置
+    const datasetScenes = {
+        'YIJIA-AVIA': [
+            { value: 'YIJIA-AVIA-1', label: 'Scene-1' },
+            { value: 'YIJIA-AVIA-2', label: 'Scene-2' },
+            { value: 'YIJIA-AVIA-3', label: 'Scene-3' },
+            { value: 'YIJIA-AVIA-4', label: 'Scene-4' },
+            { value: 'YIJIA-AVIA-5', label: 'Scene-5' },
+            { value: 'YIJIA-AVIA-6', label: 'Scene-6' },
+            { value: 'YIJIA-AVIA-7', label: 'Scene-7' },
+            { value: 'YIJIA-AVIA-8', label: 'Scene-8' },
+            { value: 'YIJIA-AVIA-9', label: 'Scene-9' },
+            { value: 'YIJIA-AVIA-10', label: 'Scene-10' }
+        ],
+        'YIJIA-MID': [
+            { value: 'YIJIA-MID-1', label: 'Scene-1' },
+            { value: 'YIJIA-MID-2', label: 'Scene-2' },
+            { value: 'YIJIA-MID-3', label: 'Scene-3' },
+            { value: 'YIJIA-MID-4', label: 'Scene-4' },
+            { value: 'YIJIA-MID-5', label: 'Scene-5' },
+            { value: 'YIJIA-MID-6', label: 'Scene-6' },
+            { value: 'YIJIA-MID-7', label: 'Scene-7' },
+            { value: 'YIJIA-MID-8', label: 'Scene-8' },
+            { value: 'YIJIA-MID-9', label: 'Scene-9' },
+            { value: 'YIJIA-MID-10', label: 'Scene-10' }
+        ],
+        'JLCC': [
+            { value: 'JLCC-Scene-1-1', label: 'Scene-1' },
+            { value: 'JLCC-Scene-1-2', label: 'Scene-1-1' },
+            { value: 'JLCC-Scene-1-3', label: 'Scene-1-2' },
+            { value: 'JLCC-Scene-1-4', label: 'Scene-1-3' },
+            { value: 'JLCC-Scene-1-5', label: 'Scene-1-4' },
+            { value: 'JLCC-Scene-2-1', label: 'Scene-2' },
+            { value: 'JLCC-Scene-2-2', label: 'Scene-2-1' },
+            { value: 'JLCC-Scene-2-3', label: 'Scene-2-2' },
+            { value: 'JLCC-Scene-2-4', label: 'Scene-2-3' },
+            { value: 'JLCC-Scene-2-5', label: 'Scene-2-4' },
+            { value: 'JLCC-Scene-3-1', label: 'Scene-3' },
+            { value: 'JLCC-Scene-3-2', label: 'Scene-3-1' },
+            { value: 'JLCC-Scene-3-3', label: 'Scene-3-2' },
+            { value: 'JLCC-Scene-3-4', label: 'Scene-3-3' },
+            { value: 'JLCC-Scene-3-5', label: 'Scene-3-4' }
+        ],
+        'MLCC-AVIA': [
+            { value: 'MLCC-AVIA-Scene1-1', label: 'Scene-1-1' },
+            { value: 'MLCC-AVIA-Scene1-2', label: 'Scene-1-2' },
+            { value: 'MLCC-AVIA-Scene1-3', label: 'Scene-1-3' },
+            { value: 'MLCC-AVIA-Scene1-4', label: 'Scene-1-4' },
+            { value: 'MLCC-AVIA-Scene1-5', label: 'Scene-1-5' },
+            { value: 'MLCC-AVIA-Scene2-1', label: 'Scene-2-1' },
+            { value: 'MLCC-AVIA-Scene2-2', label: 'Scene-2-2' },
+            { value: 'MLCC-AVIA-Scene2-3', label: 'Scene-2-3' },
+            { value: 'MLCC-AVIA-Scene2-4', label: 'Scene-2-4' },
+            { value: 'MLCC-AVIA-Scene2-5', label: 'Scene-2-5' }
+        ],
+        'MLCC-MID': [
+            { value: 'MLCC-MID-Scene1-1', label: 'Scene-1-1' },
+            { value: 'MLCC-MID-Scene1-2', label: 'Scene-1-2' },
+            { value: 'MLCC-MID-Scene1-3', label: 'Scene-1-3' },
+            { value: 'MLCC-MID-Scene1-4', label: 'Scene-1-4' },
+            { value: 'MLCC-MID-Scene1-5', label: 'Scene-1-5' },
+            { value: 'MLCC-MID-Scene2-1', label: 'Scene-2-1' },
+            { value: 'MLCC-MID-Scene2-2', label: 'Scene-2-2' },
+            { value: 'MLCC-MID-Scene2-3', label: 'Scene-2-3' },
+            { value: 'MLCC-MID-Scene2-4', label: 'Scene-2-4' },
+            { value: 'MLCC-MID-Scene2-5', label: 'Scene-2-5' }
+        ]
+    };
+
+    // const baseUrl = window.location.pathname;
+
+
+    const baseUrl = window.location.pathname;
+    const baseDir = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+    currentPathSpan.innerText = window.location.origin + baseDir;
+
+    // 全局变量
+    let currentPointClouds = [];
+    let currentIntensityData = [];    // 仅当文件有强度时使用
+    let currentRGBData = [];          // 存储RGB数据（展平）
+    let currentMode = 'rgb';          // 默认RGB模式
+    let totalPoints = 0;
+    let isLoading = false;
+    let isCameraMoving = false;
+    let hasIntensityGlobal = false;
+    let hasRGBGlobal = false;
+
+    // 分批次加载配置
+    const BATCH_SIZE = 100000;
+    const MAX_POINTS = 5000000;
+    const LOD_DISTANCES = [10, 30, 50];
+   const LOD_SIZES = [0.1, 0.08, 0.05];  // 点更大
+
+
+
+    // 动态更新场景选项函数
+    function updateSceneOptions(datasetType) {
+        pcdSelect.innerHTML = '';
+
+        const scenes = datasetScenes[datasetType] || [];
+        scenes.forEach(scene => {
+            const option = document.createElement('option');
+            option.value = scene.value;
+            option.textContent = scene.label;
+            pcdSelect.appendChild(option);
+        });
+    }
+
+    // 监听数据集选择变化
+    datasetGroupSelect.addEventListener('change', (e) => {
+        const selectedDataset = e.target.value;
+        updateSceneOptions(selectedDataset);
+
+        // 自动加载新数据集的第一个场景
+        if (pcdSelect.options.length > 0) {
+            loadPointCloudAndDisplay(pcdSelect.options[0].value);
+        }
+    });
+
+
+    // 热力图颜色映射（用于强度模式）
+    function getThermalColor(value, minVal, maxVal) {
+        const t = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
+        const color = new THREE.Color();
+        color.setHSL(0.7 - t * 0.7, 1.0, 0.5 * t + 0.2);
+        return [color.r, color.g, color.b];
+    }
+
+    // 解析PLY头部信息
+    function parsePLYHeader(text) {
+        const lines = text.split('\n');
+        let headerEnd = 0;
+        let elementVertex = false;
+        let vertexCount = 0;
+        let properties = [];
+        let isBinary = false;
+        let binaryFormat = '';
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+
+            if (line.startsWith('format')) {
+                if (line.includes('binary')) {
+                    isBinary = true;
+                    binaryFormat = line.split(' ')[1];
+                }
+            } else if (line.startsWith('element vertex')) {
+                elementVertex = true;
+                vertexCount = parseInt(line.split(' ')[2]);
+            } else if (elementVertex && line.startsWith('property')) {
+                const parts = line.split(' ');
+                const type = parts[1];
+                const name = parts[2];
+                properties.push({ name, type });
+            } else if (line === 'end_header') {
+                headerEnd = i + 1;
+                break;
+            }
+        }
+
+        return {
+            headerEnd,
+            vertexCount,
+            properties,
+            isBinary,
+            binaryFormat
+        };
+    }
+
+    // 计算PLY属性字节大小
+    function getPropertySize(type) {
+        switch(type) {
+            case 'char': case 'uchar': return 1;
+            case 'short': case 'ushort': return 2;
+            case 'int': case 'uint': case 'float': return 4;
+            case 'double': return 8;
+            default: return 4;
+        }
+    }
+
+    // 从PLY二进制数据读取值
+    function readPLYValue(dataView, offset, type) {
+        switch(type) {
+            case 'char': return dataView.getInt8(offset, true);
+            case 'uchar': return dataView.getUint8(offset, true);
+            case 'short': return dataView.getInt16(offset, true);
+            case 'ushort': return dataView.getUint16(offset, true);
+            case 'int': return dataView.getInt32(offset, true);
+            case 'uint': return dataView.getUint32(offset, true);
+            case 'float': return dataView.getFloat32(offset, true);
+            case 'double': return dataView.getFloat64(offset, true);
+            default: return 0;
+        }
+    }
+
+    // 加载PLY文件
+    async function loadPLYFile(filename, type) {
+        try {
+            const response = await fetch(filename);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            // 解析头部
+            const text = new TextDecoder().decode(arrayBuffer.slice(0, 1024));
+            const header = parsePLYHeader(text);
+
+            if (header.vertexCount === 0) {
+                throw new Error('未找到顶点数据');
+            }
+
+            totalPoints = Math.min(header.vertexCount, MAX_POINTS);
+
+            // 计算头部字节数
+            const headerLines = text.split('\n').slice(0, header.headerEnd);
+            const headerStr = headerLines.join('\n') + '\n';
+            const headerBytes = new TextEncoder().encode(headerStr).length;
+
+            // 找到各字段的索引
+            const xIdx = header.properties.findIndex(p => p.name === 'x');
+            const yIdx = header.properties.findIndex(p => p.name === 'y');
+            const zIdx = header.properties.findIndex(p => p.name === 'z');
+            const intensityIdx = header.properties.findIndex(p =>
+                p.name === 'intensity' || p.name === 'scalar_intensity' || p.name === 'value'
+            );
+            const redIdx = header.properties.findIndex(p =>
+                p.name === 'red' || p.name === 'r'
+            );
+            const greenIdx = header.properties.findIndex(p =>
+                p.name === 'green' || p.name === 'g'
+            );
+            const blueIdx = header.properties.findIndex(p =>
+                p.name === 'blue' || p.name === 'b'
+            );
+
+            hasIntensityGlobal = intensityIdx !== -1;
+            hasRGBGlobal = redIdx !== -1 && greenIdx !== -1 && blueIdx !== -1;
+
+            if (header.isBinary) {
+                await parseBinaryPLYInBatches(
+                    arrayBuffer,
+                    headerBytes,
+                    header.vertexCount,
+                    header.properties,
+                    xIdx, yIdx, zIdx,
+                    intensityIdx,
+                    redIdx, greenIdx, blueIdx
+                );
+            } else {
+                await parseASCIIPLYInBatches(
+                    arrayBuffer,
+                    headerBytes,
+                    header.vertexCount,
+                    header.properties,
+                    xIdx, yIdx, zIdx,
+                    intensityIdx,
+                    redIdx, greenIdx, blueIdx
+                );
+            }
+        } catch (error) {
+            console.error('加载PLY失败:', error);
+            throw error;
+        }
+    }
+
+    // 解析二进制PLY（分批次）
+    async function parseBinaryPLYInBatches(
+        arrayBuffer, headerBytes, vertexCount,
+        properties, xIdx, yIdx, zIdx,
+        intensityIdx, redIdx, greenIdx, blueIdx
+    ) {
+        const dataView = new DataView(arrayBuffer);
+        let offset = headerBytes;
+
+        // 计算每个属性的字节偏移
+        let propertySizes = properties.map(p => getPropertySize(p.type));
+        let propertyOffsets = [];
+        let currentOffset = 0;
+        for (let i = 0; i < properties.length; i++) {
+            propertyOffsets.push(currentOffset);
+            currentOffset += propertySizes[i];
+        }
+        const pointByteSize = currentOffset;
+
+        let batchPositions = [];
+        let batchIntensities = [];
+        let batchRGB = [];
+        let pointCount = 0;
+        let minIntensity = Infinity;
+        let maxIntensity = -Infinity;
+
+        return new Promise((resolve) => {
+            function processBatch() {
+                setTimeout(() => {
+                    let localCount = 0;
+
+                    while (pointCount < vertexCount &&
+                    pointCount < MAX_POINTS &&
+                    localCount < BATCH_SIZE &&
+                    offset < arrayBuffer.byteLength) {
+
+                        // 读取XYZ
+                        let x = 0, y = 0, z = 0;
+                        if (xIdx !== -1) {
+                            x = readPLYValue(dataView, offset + propertyOffsets[xIdx], properties[xIdx].type);
+                        }
+                        if (yIdx !== -1) {
+                            y = readPLYValue(dataView, offset + propertyOffsets[yIdx], properties[yIdx].type);
+                        }
+                        if (zIdx !== -1) {
+                            z = readPLYValue(dataView, offset + propertyOffsets[zIdx], properties[zIdx].type);
+                        }
+                        batchPositions.push(x, y, z);
+
+                        // 读取强度
+                        if (intensityIdx !== -1) {
+                            const intensity = readPLYValue(dataView, offset + propertyOffsets[intensityIdx], properties[intensityIdx].type);
+                            batchIntensities.push(intensity);
+                            minIntensity = Math.min(minIntensity, intensity);
+                            maxIntensity = Math.max(maxIntensity, intensity);
+                        }
+
+                        // 读取RGB
+                        if (redIdx !== -1 && greenIdx !== -1 && blueIdx !== -1) {
+                            const r = readPLYValue(dataView, offset + propertyOffsets[redIdx], properties[redIdx].type) / 255.0;
+                            const g = readPLYValue(dataView, offset + propertyOffsets[greenIdx], properties[greenIdx].type) / 255.0;
+                            const b = readPLYValue(dataView, offset + propertyOffsets[blueIdx], properties[blueIdx].type) / 255.0;
+                            batchRGB.push(r, g, b);
+                        }
+
+                        offset += pointByteSize;
+                        pointCount++;
+                        localCount++;
+                    }
+
+                    const progress = Math.floor((pointCount / Math.min(vertexCount, MAX_POINTS)) * 100);
+                    progressText.textContent = `${progress}%`;
+                    progressFill.style.width = `${progress}%`;
+
+                    if (batchPositions.length > 0) {
+                        // 创建批次点云
+                        const geometry = new THREE.BufferGeometry();
+                        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(batchPositions), 3));
+
+                        // 设置颜色
+                        const pointCountInBatch = batchPositions.length / 3;
+                        const colors = new Float32Array(batchPositions.length);
+
+                        for (let i = 0; i < pointCountInBatch; i++) {
+                            let r, g, b;
+
+                            if (currentMode === 'rgb' && hasRGBGlobal && batchRGB.length > 0) {
+                                r = batchRGB[i*3];
+                                g = batchRGB[i*3+1];
+                                b = batchRGB[i*3+2];
+                            } else if ((currentMode === 'thermal' || currentMode === 'grayscale' || currentMode === 'brightness') &&
+                                hasIntensityGlobal && batchIntensities.length > 0) {
+                                const val = batchIntensities[i];
+                                if (currentMode === 'thermal') {
+                                    [r, g, b] = getThermalColor(val, minIntensity, maxIntensity);
+                                } else if (currentMode === 'grayscale') {
+                                    const gray = (val - minIntensity) / (maxIntensity - minIntensity);
+                                    r = g = b = gray;
+                                } else {
+                                    const brightness = 0.5 + 0.5 * (val - minIntensity) / (maxIntensity - minIntensity);
+                                    r = 0.3 * brightness;
+                                    g = 0.5 * brightness;
+                                    b = 1.0 * brightness;
+                                }
+                            } else {
+                                r = g = b = 0.8;
+                            }
+
+                            colors[i*3] = r;
+                            colors[i*3+1] = g;
+                            colors[i*3+2] = b;
+                        }
+
+                        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+                        // 创建LOD
+                        const lod = new THREE.LOD();
+                        for (let i = 0; i < LOD_DISTANCES.length; i++) {
+                            const material = new THREE.PointsMaterial({
+                                size: LOD_SIZES[i],
+                                vertexColors: true,
+                                sizeAttenuation: true,
+                                transparent: true,
+                                opacity: 0.9
+                            });
+                            const points = new THREE.Points(geometry.clone(), material);
+                            lod.addLevel(points, LOD_DISTANCES[i]);
+                        }
+
+                        currentPointClouds.push(lod);
+                        pointsGroup.add(lod);
+
+                        pointCountSpan.innerText = pointCount;
+
+                        batchPositions = [];
+                        batchIntensities = [];
+                        batchRGB = [];
+                    }
+
+                    if (pointCount < vertexCount && pointCount < MAX_POINTS && offset < arrayBuffer.byteLength) {
+                        processBatch();
+                    } else {
+                        // 更新UI
+                        rgbStatusSpan.innerText = hasRGBGlobal ? '可用' : '无';
+                        rgbStatusSpan.style.color = hasRGBGlobal ? '#22c55e' : '#94a3b8';
+                        intensityStatusSpan.innerText = hasIntensityGlobal ? '可用' : '无';
+                        intensityStatusSpan.style.color = hasIntensityGlobal ? '#22c55e' : '#94a3b8';
+
+                        if (hasIntensityGlobal) {
+                            intensityMinSpan.innerText = minIntensity.toFixed(1);
+                            intensityMaxSpan.innerText = maxIntensity.toFixed(1);
+                        } else {
+                            intensityMinSpan.innerText = '—';
+                            intensityMaxSpan.innerText = '—';
+                        }
+
+                        loadingProgress.style.display = 'none';
+                        isLoading = false;
+                        resolve();
+                    }
+                }, 0);
+            }
+
+            processBatch();
+        });
+    }
+
+    // 解析ASCII PLY（分批次）- 简化版本
+    async function parseASCIIPLYInBatches(
+        arrayBuffer, headerBytes, vertexCount,
+        properties, xIdx, yIdx, zIdx,
+        intensityIdx, redIdx, greenIdx, blueIdx
+    ) {
+        const text = new TextDecoder().decode(arrayBuffer);
+        const lines = text.split('\n');
+
+        // 找到数据起始行
+        let startLine = 0;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim() === 'end_header') {
+                startLine = i + 1;
+                break;
+            }
+        }
+
+        let batchPositions = [];
+        let batchIntensities = [];
+        let batchRGB = [];
+        let pointCount = 0;
+        let lineIndex = startLine;
+        let minIntensity = Infinity;
+        let maxIntensity = -Infinity;
+
+        return new Promise((resolve) => {
+            function processBatch() {
+                setTimeout(() => {
+                    let localCount = 0;
+
+                    while (pointCount < vertexCount &&
+                    pointCount < MAX_POINTS &&
+                    localCount < BATCH_SIZE &&
+                    lineIndex < lines.length) {
+
+                        const line = lines[lineIndex].trim();
+                        if (line === '') {
+                            lineIndex++;
+                            continue;
+                        }
+
+                        const values = line.split(/\s+/).map(Number);
+
+                        // 读取XYZ
+                        if (xIdx !== -1 && yIdx !== -1 && zIdx !== -1) {
+                            batchPositions.push(values[xIdx], values[yIdx], values[zIdx]);
+                        }
+
+                        // 读取强度
+                        if (intensityIdx !== -1) {
+                            const intensity = values[intensityIdx];
+                            batchIntensities.push(intensity);
+                            minIntensity = Math.min(minIntensity, intensity);
+                            maxIntensity = Math.max(maxIntensity, intensity);
+                        }
+
+                        // 读取RGB
+                        if (redIdx !== -1 && greenIdx !== -1 && blueIdx !== -1) {
+                            const r = values[redIdx] / 255.0;
+                            const g = values[greenIdx] / 255.0;
+                            const b = values[blueIdx] / 255.0;
+                            batchRGB.push(r, g, b);
+                        }
+
+                        pointCount++;
+                        localCount++;
+                        lineIndex++;
+                    }
+
+                    const progress = Math.floor((pointCount / Math.min(vertexCount, MAX_POINTS)) * 100);
+                    progressText.textContent = `${progress}%`;
+                    progressFill.style.width = `${progress}%`;
+
+                    if (batchPositions.length > 0) {
+                        // 创建批次点云（代码与二进制部分相同）
+                        const geometry = new THREE.BufferGeometry();
+                        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(batchPositions), 3));
+
+                        const pointCountInBatch = batchPositions.length / 3;
+                        const colors = new THREE.BufferAttribute(new Float32Array(batchPositions.length), 3);
+
+                        for (let i = 0; i < pointCountInBatch; i++) {
+                            let r, g, b;
+
+                            if (currentMode === 'rgb' && hasRGBGlobal && batchRGB.length > 0) {
+                                r = batchRGB[i*3];
+                                g = batchRGB[i*3+1];
+                                b = batchRGB[i*3+2];
+                            } else if ((currentMode === 'thermal' || currentMode === 'grayscale' || currentMode === 'brightness') &&
+                                hasIntensityGlobal && batchIntensities.length > 0) {
+                                const val = batchIntensities[i];
+                                if (currentMode === 'thermal') {
+                                    [r, g, b] = getThermalColor(val, minIntensity, maxIntensity);
+                                } else if (currentMode === 'grayscale') {
+                                    const gray = (val - minIntensity) / (maxIntensity - minIntensity);
+                                    r = g = b = gray;
+                                } else {
+                                    const brightness = 0.5 + 0.5 * (val - minIntensity) / (maxIntensity - minIntensity);
+                                    r = 0.3 * brightness;
+                                    g = 0.5 * brightness;
+                                    b = 1.0 * brightness;
+                                }
+                            } else {
+                                r = g = b = 0.8;
+                            }
+
+                            colors.array[i*3] = r;
+                            colors.array[i*3+1] = g;
+                            colors.array[i*3+2] = b;
+                        }
+
+                        geometry.setAttribute('color', colors);
+
+                        const lod = new THREE.LOD();
+                        for (let i = 0; i < LOD_DISTANCES.length; i++) {
+                            const material = new THREE.PointsMaterial({
+                                size: LOD_SIZES[i],
+                                vertexColors: true,
+                                sizeAttenuation: true,
+                                transparent: true,
+                                opacity: 0.9
+                            });
+                            const points = new THREE.Points(geometry.clone(), material);
+                            lod.addLevel(points, LOD_DISTANCES[i]);
+                        }
+
+                        currentPointClouds.push(lod);
+                        pointsGroup.add(lod);
+
+                        pointCountSpan.innerText = pointCount;
+
+                        batchPositions = [];
+                        batchIntensities = [];
+                        batchRGB = [];
+                    }
+
+                    if (pointCount < vertexCount && pointCount < MAX_POINTS && lineIndex < lines.length) {
+                        processBatch();
+                    } else {
+                        // 更新UI
+                        rgbStatusSpan.innerText = hasRGBGlobal ? '可用' : '无';
+                        rgbStatusSpan.style.color = hasRGBGlobal ? '#22c55e' : '#94a3b8';
+                        intensityStatusSpan.innerText = hasIntensityGlobal ? '可用' : '无';
+                        intensityStatusSpan.style.color = hasIntensityGlobal ? '#22c55e' : '#94a3b8';
+
+                        if (hasIntensityGlobal) {
+                            intensityMinSpan.innerText = minIntensity.toFixed(1);
+                            intensityMaxSpan.innerText = maxIntensity.toFixed(1);
+                        } else {
+                            intensityMinSpan.innerText = '—';
+                            intensityMaxSpan.innerText = '—';
+                        }
+
+                        loadingProgress.style.display = 'none';
+                        isLoading = false;
+                        resolve();
+                    }
+                }, 0);
+            }
+
+            processBatch();
+        });
+    }
+
+    // 主加载函数
+    async function loadPointCloudAndDisplay(type) {
+        if (isLoading) return;
+        isLoading = true;
+
+        // 清空之前的点云
+        currentPointClouds.forEach(lod => {
+            lod.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) obj.material.dispose();
+            });
+            pointsGroup.remove(lod);
+        });
+        currentPointClouds = [];
+        currentIntensityData = [];
+        currentRGBData = [];
+        totalPoints = 0;
+        hasIntensityGlobal = false;
+        hasRGBGlobal = false;
+
+        // 显示加载进度
+        loadingProgress.style.display = 'block';
+        progressText.textContent = '0%';
+        progressFill.style.width = '0%';
+
+        // 设置文件名
+        let filename = '';
+        let displayName = '';
+
+        if (type === 'YIJIA-AVIA-1') {
+            filename = './ply/YIJIA/AVIA-1.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-2') {
+            filename = './ply/YIJIA/AVIA-2.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-3') {
+            filename = './ply/YIJIA/AVIA-3.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-4') {
+            filename = './ply/YIJIA/AVIA-4.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-5') {
+            filename = './ply/YIJIA/AVIA-5.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-6') {
+            filename = './ply/YIJIA/AVIA-6.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-7') {
+            filename = './ply/YIJIA/AVIA-7.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-8') {
+            filename = './ply/YIJIA/AVIA-8.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-9') {
+            filename = './ply/YIJIA/AVIA-9.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-AVIA-10') {
+            filename = './ply/YIJIA/AVIA-10.ply';
+            displayName = 'YIJIA';
+        }
+        if (type === 'YIJIA-MID-1') {
+            filename = './ply/YIJIA/MID-40-1.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-2') {
+            filename = './ply/YIJIA/MID-40-2.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-3') {
+            filename = './ply/YIJIA/MID-40-3.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-4') {
+            filename = './ply/YIJIA/MID-40-4.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-5') {
+            filename = './ply/YIJIA/MID-40-5.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-6') {
+            filename = './ply/YIJIA/MID-40-6.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-7') {
+            filename = './ply/YIJIA/MID-40-7.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-8') {
+            filename = './ply/YIJIA/MID-40-8.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-9') {
+            filename = './ply/YIJIA/MID-40-9.ply';
+            displayName = 'YIJIA';
+        } else if (type === 'YIJIA-MID-10') {
+            filename = './ply/YIJIA/MID-40-10.ply';
+            displayName = 'YIJIA';
+        }
+
+        if (type === 'JLCC-Scene-1-1') {
+            filename = './ply/JLCC/SCENE1-1.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-1-2') {
+            filename = './ply/JLCC/SCENE1-2.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-1-3') {
+            filename = './ply/JLCC/SCENE1-3.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-1-4') {
+            filename = './ply/JLCC/SCENE1-4.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-1-5') {
+            filename = './ply/JLCC/SCENE1-5.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-2-1') {
+            filename = './ply/JLCC/SCENE2-1.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-2-2') {
+            filename = './ply/JLCC/SCENE2-2.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-2-3') {
+            filename = './ply/JLCC/SCENE2-3.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-2-4') {
+            filename = './ply/JLCC/SCENE2-4.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-2-5') {
+            filename = './ply/JLCC/SCENE2-5.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-3-1') {
+            filename = './ply/JLCC/SCENE3-1.ply';
+            displayName = 'JLCC';
+        } else if (type === 'JLCC-Scene-3-2') {
+            filename = './ply/JLCC/SCENE3-2.ply';
+            displayName = 'JLCC';
+        }  else if (type === 'JLCC-Scene-3-3') {
+            filename = './ply/JLCC/SCENE3-3.ply';
+            displayName = 'JLCC';
+        }else if (type === 'JLCC-Scene-3-4') {
+            filename = './ply/JLCC/SCENE3-4.ply';
+            displayName = 'JLCC';
+        }else if (type === 'JLCC-Scene-3-5') {
+            filename = './ply/JLCC/SCENE3-5.ply';
+            displayName = 'JLCC';
+        }
+
+        if (type === 'MLCC-AVIA-Scene1-1') {
+            filename = './ply/MLCC/SCENE1-AVIA-1.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene1-2') {
+            filename = './ply/MLCC/SCENE1-AVIA-2.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene1-3') {
+            filename = './ply/MLCC/SCENE1-AVIA-3.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene1-4') {
+            filename = './ply/MLCC/SCENE1-AVIA-4.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene1-5') {
+            filename = './ply/MLCC/SCENE1-AVIA-5.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene2-1') {
+            filename = './ply/MLCC/SCENE2-AVIA-1.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene2-2') {
+            filename = './ply/MLCC/SCENE2-AVIA-2.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene2-3') {
+            filename = './ply/MLCC/SCENE2-AVIA-3.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene2-4') {
+            filename = './ply/MLCC/SCENE2-AVIA-4.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-AVIA-Scene2-5') {
+            filename = './ply/MLCC/SCENE2-AVIA-5.ply';
+            displayName = 'MLCC';
+        }
+        if (type === 'MLCC-MID-Scene1-1') {
+            filename = './ply/MLCC/SCENE1-MID-100-1.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene1-2') {
+            filename = './ply/MLCC/SCENE1-MID-100-2.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene1-3') {
+            filename = './ply/MLCC/SCENE1-MID-100-3.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene1-4') {
+            filename = './ply/MLCC/SCENE1-MID-100-4.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene1-5') {
+            filename = './ply/MLCC/SCENE1-MID-100-5.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene2-1') {
+            filename = './ply/MLCC/SCENE2-MID-100-1.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene2-2') {
+            filename = './ply/MLCC/SCENE2-MID-100-2.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene2-3') {
+            filename = './ply/MLCC/SCENE2-MID-100-3.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene2-4') {
+            filename = './ply/MLCC/SCENE2-MID-100-4.ply';
+            displayName = 'MLCC';
+        } else if (type === 'MLCC-MID-Scene2-5') {
+            filename = './ply/MLCC/SCENE2-MID-100-5.ply';
+            displayName = 'MLCC';
+        }
+
+        currentFileSpan.innerText = displayName;
+
+        try {
+            await loadPLYFile(filename, type);
+        } catch (error) {
+            console.error(`加载 ${filename} 失败:`, error);
+            currentFileSpan.innerText = `加载失败 (${filename} 不存在或格式错误)`;
+            pointCountSpan.innerText = '0';
+            rgbStatusSpan.innerText = 'N/A';
+            intensityStatusSpan.innerText = 'N/A';
+            loadingProgress.style.display = 'none';
+            isLoading = false;
+        }
+    }
+
+    // 更新点云颜色（模式切换时调用）
+    function updatePointCloudColor(mode) {
+        if (currentPointClouds.length === 0) return;
+
+        const minIntensity = parseFloat(intensityMinSpan.innerText) || 0;
+        const maxIntensity = parseFloat(intensityMaxSpan.innerText) || 1;
+        const hasRGB = rgbStatusSpan.innerText === '可用';
+        const hasIntensity = intensityStatusSpan.innerText === '可用';
+
+        // 遍历所有LOD对象并更新颜色属性
+        currentPointClouds.forEach(lod => {
+            lod.traverse(obj => {
+                if (obj instanceof THREE.Points && obj.geometry.attributes.color) {
+                    const colors = obj.geometry.attributes.color.array;
+                    const positions = obj.geometry.attributes.position.array;
+                    const pointCount = positions.length / 3;
+
+                    for (let i = 0; i < pointCount; i++) {
+                        let r, g, b;
+
+                        if (mode === 'rgb' && hasRGB && currentRGBData.length > i*3+2) {
+                            r = currentRGBData[i*3];
+                            g = currentRGBData[i*3+1];
+                            b = currentRGBData[i*3+2];
+                        } else if ((mode === 'thermal' || mode === 'grayscale' || mode === 'brightness') &&
+                            hasIntensity && currentIntensityData.length > i) {
+                            const val = currentIntensityData[i];
+                            if (mode === 'thermal') {
+                                [r, g, b] = getThermalColor(val, minIntensity, maxIntensity);
+                            } else if (mode === 'grayscale') {
+                                const gray = (val - minIntensity) / (maxIntensity - minIntensity);
+                                r = g = b = gray;
+                            } else if (mode === 'brightness') {
+                                const brightness = 0.5 + 0.5 * (val - minIntensity) / (maxIntensity - minIntensity);
+                                r = 0.3 * brightness;
+                                g = 0.5 * brightness;
+                                b = 1.0 * brightness;
+                            }
+                        } else {
+                            r = g = b = 0.8;
+                        }
+
+                        colors[i*3] = r;
+                        colors[i*3+1] = g;
+                        colors[i*3+2] = b;
+                    }
+                    obj.geometry.attributes.color.needsUpdate = true;
+                }
+            });
+        });
+    }
+
+    // 事件监听
+    // document.getElementById('pcd-select').addEventListener('change', (e) => {
+    //     loadPointCloudAndDisplay(e.target.value);
+    //     controls.autoRotate = true;
+    // });
+    //
+    // document.querySelectorAll('.mode-btn').forEach(btn => {
+    //     btn.addEventListener('click', () => {
+    //         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    //         btn.classList.add('active');
+    //         currentMode = btn.dataset.mode;
+    //         updatePointCloudColor(currentMode);
+    //     });
+    // });
+    // 事件监听
+    document.getElementById('pcd-select').addEventListener('change', (e) => {
+        loadPointCloudAndDisplay(e.target.value);
+        controls.autoRotate = true;
+    });
+
+    // 初始化场景选项（默认显示 YIJIA-AVIA）
+    updateSceneOptions('YIJIA-AVIA');
+
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMode = btn.dataset.mode;
+            updatePointCloudColor(currentMode);
+        });
+    });
+
+    controls.addEventListener('start', () => {
+        isCameraMoving = true;
+        controls.autoRotate = false;
+    });
+
+    controls.addEventListener('end', () => {
+        isCameraMoving = false;
+        setTimeout(() => {
+            if (!isCameraMoving) controls.autoRotate = true;
+        }, 3000);
+    });
+
+    window.addEventListener('resize', () => {
+        const newWidth = canvas.clientWidth;
+        const newHeight = 500;
+        camera.aspect = newWidth / newHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(newWidth, newHeight);
+    });
+
+    let lastFrameTime = 0;
+    const TARGET_FPS = 60;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
+
+    function animate(timestamp) {
+        if (timestamp - lastFrameTime < FRAME_INTERVAL) {
+            requestAnimationFrame(animate);
+            return;
+        }
+        lastFrameTime = timestamp;
+
+        currentPointClouds.forEach(lod => {
+            if (lod) lod.update(camera);
+        });
+
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+    }
+
+    // 默认加载vision.ply (RGB彩色点云)
+    loadPointCloudAndDisplay('YIJIA-AVIA-1');
+    animate();
+
+    setTimeout(() => {
+        const newWidth = canvas.clientWidth;
+        const newHeight = 500;
+        camera.aspect = newWidth / newHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(newWidth, newHeight);
+    }, 50);
+
+</script>
+</body>
+</html>
